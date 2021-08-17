@@ -1,6 +1,9 @@
 const router = require("express").Router();
 const { checkUsernameExists, validateRoleName } = require('./auth-middleware');
 const { JWT_SECRET } = require("../secrets"); // use this secret!
+const users = require('../users/users-model');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken')
 
 router.post("/register", validateRoleName, (req, res, next) => {
   /**
@@ -14,6 +17,18 @@ router.post("/register", validateRoleName, (req, res, next) => {
       "role_name": "angel"
     }
    */
+  const user = req.body;
+
+  const rounds = process.env.BCRY_ROUNDS || 8;
+  const hash = bcrypt.hashSync(user.password, rounds);
+
+  user.password = hash
+
+  users.add(user)
+    .then(newUser => {
+      res.status(201).json(newUser)
+    })
+    .catch(next)  
 });
 
 
@@ -37,6 +52,18 @@ router.post("/login", checkUsernameExists, (req, res, next) => {
       "role_name": "admin" // the role of the authenticated user
     }
    */
+  const { username, password } = req.body
+
+  users.findBy({ username })
+    .then(([user]) => {
+      if(user && bcrypt.compareSync(password, user.password)){
+        res.status(200).json({
+          message:`${user.username} is back!`
+        })
+      }else{
+        next({ status:401 , message:'Invalid Credentials'})
+      }
+    }).catch(next);
 });
 
 module.exports = router;
